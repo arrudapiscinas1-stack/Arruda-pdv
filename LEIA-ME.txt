@@ -1,0 +1,4 @@
+ARRUDA PDV - versão visual iPhone
+Logo oficial incluída nos ícones e no sistema.
+Para instalar no iPhone como aplicativo, publique a pasta inteira em hospedagem HTTPS, abra pelo Safari e escolha Compartilhar > Adicionar à Tela de Início.
+ATENÇÃO: armazenamento local, sem sincronização com computador; faça backup. Não use dados reais de clientes sem proteção e autenticação.
