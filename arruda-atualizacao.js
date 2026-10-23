@@ -1,4 +1,4 @@
-/* Arruda PDV - atualização estoque e orçamento PDF - v2 */
+/* Arruda PDV - atualização estoque e orçamento PDF - v3 */
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -50,14 +50,26 @@
   };
   const register=$('produtos')?.querySelector('button[onclick="cadastrar()"]');
   if(register){register.id='arrudaSalvarProduto';register.setAttribute('onclick','arrudaSalvarProduto()');const cancel=document.createElement('button');cancel.id='arrudaCancelarProduto';cancel.className='secondary';cancel.textContent='Cancelar edição';cancel.hidden=true;cancel.onclick=window.arrudaCancelarProduto;register.after(cancel);}
-  // PDF via jsPDF. Requires internet the first time to load library.
+  // Carrega antecipadamente a biblioteca para evitar atraso no toque do Safari.
+  let pdfPromise;
   function loadPDF(){
     if(window.jspdf?.jsPDF)return Promise.resolve(window.jspdf.jsPDF);
-    return new Promise((resolve,reject)=>{
-      const script=document.createElement('script');script.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
-      script.onload=()=>window.jspdf?.jsPDF?resolve(window.jspdf.jsPDF):reject(Error('Biblioteca PDF indisponível'));
-      script.onerror=()=>reject(Error('Sem conexão para carregar o gerador de PDF'));document.head.appendChild(script);
-    });
+    if(pdfPromise)return pdfPromise;
+    pdfPromise=new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+      script.onload=()=>window.jspdf?.jsPDF?resolve(window.jspdf.jsPDF):reject(Error('Biblioteca PDF não inicializou'));
+      script.onerror=()=>reject(Error('Não foi possível carregar a biblioteca PDF. Verifique a internet.'));
+      document.head.appendChild(script);
+    }).catch(e=>{pdfPromise=null;throw e});
+    return pdfPromise;
+  }
+  loadPDF().catch(e=>console.warn('PDF:',e.message));
+  function showPDFStatus(message){
+    let status=$('arrudaPdfStatus');
+    if(!status){status=document.createElement('div');status.id='arrudaPdfStatus';status.style='margin:12px 0;padding:12px;border-radius:9px;background:#fff3d8;color:#663d00;font-size:14px';
+      ($('orcLinhas')?.parentElement||$('orcamentos')).appendChild(status);}
+    status.textContent=message;
   }
   function buildPDF(o,jsPDF){
     const doc=new jsPDF({unit:'mm',format:'a4'}),W=210,left=16,right=194;
@@ -77,14 +89,38 @@
   }
   const filename=o=>'orcamento-arruda-'+o.id+'.pdf';
   async function pdfAction(o,share){
+    showPDFStatus('Preparando PDF...');
     try{
       const jsPDF=await loadPDF(),doc=buildPDF(o,jsPDF),name=filename(o);
-      if(share){const blob=doc.output('blob'),file=new File([blob],name,{type:'application/pdf'});
-        if(navigator.canShare?.({files:[file]})&&navigator.share){try{await navigator.share({files:[file],title:'Orcamento Arruda Piscinas'});return;}catch(e){if(e.name==='AbortError')return;}}
-        doc.save(name);alert('O PDF foi baixado. Abra o arquivo e use Compartilhar para enviar pelo WhatsApp.');return;
+      const blob=doc.output('blob');
+      if(!blob||blob.size<100)throw Error('O arquivo PDF foi gerado vazio.');
+      const file=new File([blob],name,{type:'application/pdf'});
+      if(share && navigator.share && navigator.canShare?.({files:[file]})){
+        try{
+          await navigator.share({files:[file],title:'Orçamento Arruda Piscinas'});
+          showPDFStatus('Compartilhamento aberto.');return;
+        }catch(e){
+          if(e.name==='AbortError'){showPDFStatus('Compartilhamento cancelado.');return;}
+          console.warn('Compartilhamento:',e);
+        }
       }
-      doc.save(name);
-    }catch(e){console.error(e);alert('Não foi possível gerar o PDF: '+e.message+'. Confira sua conexão com a internet e tente novamente.');}
+      // Fallback: abrir o arquivo em uma aba para o Safari permitir Salvar em Arquivos / Compartilhar.
+      const url=URL.createObjectURL(blob);
+      if(share){
+        const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';
+        document.body.appendChild(a);a.click();a.remove();
+        showPDFStatus('PDF preparado. Se ele abriu em outra aba, toque em Compartilhar no Safari e escolha WhatsApp ou Salvar em Arquivos. Se não abriu, permita pop-ups para este site ou use Baixar PDF.');
+      }else{
+        const a=document.createElement('a');a.href=url;a.download=name;
+        document.body.appendChild(a);a.click();a.remove();
+        showPDFStatus('PDF preparado. Confira Downloads ou Arquivos no iPhone.');
+      }
+      setTimeout(()=>URL.revokeObjectURL(url),120000);
+    }catch(e){
+      console.error('Arruda PDF:',e);
+      showPDFStatus('Erro ao gerar PDF: '+e.message+' — confira sua conexão e tente novamente.');
+      alert('Erro ao gerar PDF: '+e.message);
+    }
   }
   function createQuote(){
     const c=db.clientes.find(x=>String(x.id)===String($('orcCliente').value));if(!c)return alert('Cadastre e selecione um cliente.');
