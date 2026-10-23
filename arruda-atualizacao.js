@@ -57,7 +57,7 @@
     if(pdfPromise)return pdfPromise;
     pdfPromise=new Promise((resolve,reject)=>{
       const script=document.createElement('script');
-      script.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+   script.src='./jspdf.umd.min.js';
       script.onload=()=>window.jspdf?.jsPDF?resolve(window.jspdf.jsPDF):reject(Error('Biblioteca PDF não inicializou'));
       script.onerror=()=>reject(Error('Não foi possível carregar a biblioteca PDF. Verifique a internet.'));
       document.head.appendChild(script);
